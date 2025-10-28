@@ -19,6 +19,11 @@ const PLATFORM_SHRINK_RATE = 8; // pixels per second
 class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
+    
+    // Check if this is the first game session
+    if (typeof GameScene.firstPlay === 'undefined') {
+      GameScene.firstPlay = true;
+    }
   }
 
   create() {
@@ -34,6 +39,12 @@ class GameScene extends Phaser.Scene {
     this.deathReason = null; // Track how the player died
     this.gameOverAnimationPlaying = false;
     this.currentPlatformWidth = INITIAL_PLATFORM_WIDTH;
+    
+    // Tutorial state
+    this.tutorialMode = GameScene.firstPlay;
+    this.tutorialStep = 0;
+    this.tutorialCycleCount = 0;
+    this.tutorialJumpCount = 0;
     
     // Create background
     this.backgroundRect = this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
@@ -82,6 +93,25 @@ class GameScene extends Phaser.Scene {
       color: '#cccccc',
       align: 'center'
     }).setOrigin(0.5, 0.5);
+
+    // Press duration indicator (circular gauge)
+    const gaugeX = 400;
+    const gaugeY = 505;
+    const gaugeRadius = 8;
+    
+    // Background circle
+    this.pressGaugeBg = this.add.circle(gaugeX, gaugeY, gaugeRadius, 0x333333);
+    this.pressGaugeBg.setStrokeStyle(1, 0x555555);
+    this.pressGaugeBg.setVisible(false);
+    
+    // Fill circle (grows as you hold)
+    this.pressGaugeFill = this.add.circle(gaugeX, gaugeY, 0, 0xf5d547);
+    this.pressGaugeFill.setVisible(false);
+    
+    // Threshold ring (shows 200ms mark)
+    this.pressGaugeThreshold = this.add.circle(gaugeX, gaugeY, gaugeRadius * 0.7, 0x000000, 0);
+    this.pressGaugeThreshold.setStrokeStyle(2, 0xe74c3c, 0.6);
+    this.pressGaugeThreshold.setVisible(false);
 
     // Timer display
     this.timerText = this.add.text(650, 520, '00.00', {
@@ -162,6 +192,39 @@ class GameScene extends Phaser.Scene {
     this.restartText.setOrigin(0.5, 0.5);
     this.restartText.setVisible(false);
 
+    // Tutorial overlay and text
+    this.tutorialOverlay = this.add.rectangle(400, 200, 600, 120, 0x000000, 0.8);
+    this.tutorialOverlay.setOrigin(0.5, 0.5);
+    this.tutorialOverlay.setStrokeStyle(3, 0x4a9eff);
+    this.tutorialOverlay.setVisible(false);
+    
+    this.tutorialText = this.add.text(400, 180, '', {
+      fontSize: '24px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      align: 'center',
+      fontStyle: 'bold'
+    });
+    this.tutorialText.setOrigin(0.5, 0.5);
+    this.tutorialText.setVisible(false);
+    
+    this.tutorialSubtext = this.add.text(400, 220, '', {
+      fontSize: '16px',
+      fontFamily: 'Arial',
+      color: '#cccccc',
+      align: 'center'
+    });
+    this.tutorialSubtext.setOrigin(0.5, 0.5);
+    this.tutorialSubtext.setVisible(false);
+    
+    // Start tutorial
+    if (this.tutorialMode) {
+      this.tutorialOverlay.setVisible(true);
+      this.tutorialText.setVisible(true);
+      this.tutorialSubtext.setVisible(true);
+      this.updateTutorialText();
+    }
+
     // Input handling
     this.input.keyboard.on('keydown-R', () => {
       if (this.gameOver) this.scene.restart();
@@ -172,9 +235,14 @@ class GameScene extends Phaser.Scene {
     this.spacePressed = false;
     
     this.input.keyboard.on('keydown-SPACE', () => {
-      if (!this.spacePressed) {
+      if (!this.spacePressed && !this.gameOver) {
         this.spacePressed = true;
         this.spacePressStartTime = this.time.now;
+        
+        // Show gauge
+        this.pressGaugeBg.setVisible(true);
+        this.pressGaugeFill.setVisible(true);
+        this.pressGaugeThreshold.setVisible(true);
       }
     });
 
@@ -182,6 +250,11 @@ class GameScene extends Phaser.Scene {
       if (this.spacePressed) {
         this.spacePressed = false;
         const pressDuration = this.time.now - this.spacePressStartTime;
+        
+        // Hide gauge
+        this.pressGaugeBg.setVisible(false);
+        this.pressGaugeFill.setVisible(false);
+        this.pressGaugeThreshold.setVisible(false);
         
         // Short press = cycle color, long press = jump
         if (pressDuration < 200) {
@@ -194,18 +267,30 @@ class GameScene extends Phaser.Scene {
   }
 
   spawnInitialPlatforms() {
-    // First platform at game start (blue) - positioned so left edge is at screen left edge (x=0)
-    // Platform width is INITIAL_PLATFORM_WIDTH (500), so center should be at 250
-    const firstPlatform = this.createPlatform(250, 400, 0);
-    this.currentPlatform = firstPlatform;
+    if (this.tutorialMode) {
+      // Tutorial: One very long platform
+      const tutorialPlatformWidth = 1200;
+      const firstPlatform = this.add.rectangle(600, 400, tutorialPlatformWidth, PLATFORM_HEIGHT, COLORS.blue);
+      firstPlatform.setOrigin(0.5, 0.5);
+      firstPlatform.setStrokeStyle(1, 0xffffff);
+      firstPlatform.setData('colorIndex', 0);
+      firstPlatform.setData('color', 'blue');
+      firstPlatform.setData('isTutorialPlatform', true);
+      this.platforms.add(firstPlatform);
+      this.currentPlatform = firstPlatform;
+    } else {
+      // Normal game start
+      const firstPlatform = this.createPlatform(250, 400, 0);
+      this.currentPlatform = firstPlatform;
 
-    // Subsequent platforms with varied colors
-    let nextX = 250 + this.currentPlatformWidth + PLATFORM_GAP;
-    for (let i = 1; i < 10; i++) {
-      // Ensure some variation in colors for interesting patterns
-      const colorIndex = Math.floor(Math.random() * 3);
-      this.createPlatform(nextX, 400, colorIndex);
-      nextX += this.currentPlatformWidth + PLATFORM_GAP;
+      // Subsequent platforms with varied colors
+      let nextX = 250 + this.currentPlatformWidth + PLATFORM_GAP;
+      for (let i = 1; i < 10; i++) {
+        // Ensure some variation in colors for interesting patterns
+        const colorIndex = Math.floor(Math.random() * 3);
+        this.createPlatform(nextX, 400, colorIndex);
+        nextX += this.currentPlatformWidth + PLATFORM_GAP;
+      }
     }
   }
 
@@ -233,40 +318,79 @@ class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.elapsedTime += delta / 1000;
-    this.updateTimer();
+    // Update press duration gauge
+    if (this.spacePressed && this.pressGaugeFill.visible) {
+      const pressDuration = this.time.now - this.spacePressStartTime;
+      const maxDuration = 400; // Max visual duration (200ms is threshold)
+      const progress = Math.min(pressDuration / maxDuration, 1);
+      
+      // Scale the fill circle
+      const maxRadius = 8;
+      this.pressGaugeFill.radius = maxRadius * progress;
+      
+      // Change color based on threshold
+      if (pressDuration < 200) {
+        // Short press - yellow
+        this.pressGaugeFill.setFillStyle(0xf5d547);
+      } else {
+        // Long press - red (jump)
+        this.pressGaugeFill.setFillStyle(0xe74c3c);
+        
+        // Pulse effect when in jump zone
+        const pulse = Math.sin(_time / 100) * 0.1 + 0.9;
+        this.pressGaugeFill.setScale(pulse);
+      }
+    } else {
+      // Reset scale when not pressing
+      this.pressGaugeFill.setScale(1);
+    }
 
-    // Update platform width based on elapsed time
-    this.updatePlatformWidth(delta);
+    // Tutorial mode pulsing effect
+    if (this.tutorialMode && this.tutorialOverlay.visible) {
+      const pulse = Math.sin(_time / 500) * 0.05 + 0.95;
+      this.tutorialText.setScale(pulse);
+    }
 
-    // Apply gravity and jumping
+    // Don't update timer or scroll during tutorial
+    if (!this.tutorialMode) {
+      this.elapsedTime += delta / 1000;
+      this.updateTimer();
+
+      // Update platform width based on elapsed time
+      this.updatePlatformWidth(delta);
+
+      // Scroll platforms left
+      this.platforms.children.entries.forEach(platform => {
+        platform.x -= PLATFORM_SPEED * (delta / 1000);
+      });
+    }
+
+    // Apply gravity and jumping (works in both modes)
     this.velocityY += GRAVITY * (delta / 1000);
     this.playerY += this.velocityY * (delta / 1000);
 
-    // Scroll platforms left
-    this.platforms.children.entries.forEach(platform => {
-      platform.x -= PLATFORM_SPEED * (delta / 1000);
-    });
+    // Only remove/spawn platforms when not in tutorial mode
+    if (!this.tutorialMode) {
+      // Remove off-screen platforms - only when completely off screen (accounting for platform width)
+      this.platforms.children.entries.forEach(platform => {
+        const platformHalfWidth = platform.width / 2;
+        if (platform.x < -platformHalfWidth - 50) { // Extra buffer to ensure it's fully off-screen
+          this.platforms.remove(platform);
+          platform.destroy();
+        }
+      });
 
-    // Remove off-screen platforms - only when completely off screen (accounting for platform width)
-    this.platforms.children.entries.forEach(platform => {
-      const platformHalfWidth = platform.width / 2;
-      if (platform.x < -platformHalfWidth - 50) { // Extra buffer to ensure it's fully off-screen
-        this.platforms.remove(platform);
-        platform.destroy();
-      }
-    });
-
-    // Spawn new platforms
-    this.platformCounter += delta / 1000;
-    if (this.platformCounter > 0.6) {
-      this.platformCounter = 0;
-      const children = this.platforms.getChildren();
-      if (children.length > 0) {
-        const lastPlatform = children[children.length - 1];
-        const nextX = lastPlatform.x + this.currentPlatformWidth + PLATFORM_GAP;
-        const randomColor = Math.floor(Math.random() * 3);
-        this.createPlatform(nextX, 400, randomColor);
+      // Spawn new platforms
+      this.platformCounter += delta / 1000;
+      if (this.platformCounter > 0.6) {
+        this.platformCounter = 0;
+        const children = this.platforms.getChildren();
+        if (children.length > 0) {
+          const lastPlatform = children[children.length - 1];
+          const nextX = lastPlatform.x + this.currentPlatformWidth + PLATFORM_GAP;
+          const randomColor = Math.floor(Math.random() * 3);
+          this.createPlatform(nextX, 400, randomColor);
+        }
       }
     }
 
@@ -328,6 +452,12 @@ class GameScene extends Phaser.Scene {
     this.currentPlatform.setFillStyle(COLORS[nextColor]);
 
     this.updatePlatformColorDisplay();
+    
+    // Tutorial tracking
+    if (this.tutorialMode) {
+      this.tutorialCycleCount++;
+      this.updateTutorialProgress();
+    }
   }
 
   updatePlatformColorDisplay() {
@@ -343,13 +473,36 @@ class GameScene extends Phaser.Scene {
     // Check if platform is red (colorIndex 2)
     const platformColorIndex = this.currentPlatform.getData('colorIndex');
     if (platformColorIndex !== 2) {
-      const wrongColor = COLOR_ORDER[platformColorIndex] ? COLOR_ORDER[platformColorIndex].toUpperCase() : 'UNKNOWN';
-      this.endGame(`JUMPED ON ${wrongColor}!`);
-      return;
+      // In tutorial mode, don't end game - just give feedback
+      if (this.tutorialMode) {
+        const wrongColor = COLOR_ORDER[platformColorIndex] ? COLOR_ORDER[platformColorIndex].toUpperCase() : 'UNKNOWN';
+        this.tutorialText.setText(`Can't jump on ${wrongColor}!`);
+        this.tutorialSubtext.setText('Cycle to RED first');
+        
+        // Flash the platform
+        this.tweens.add({
+          targets: this.currentPlatform,
+          alpha: { from: 1, to: 0.3 },
+          yoyo: true,
+          duration: 100,
+          repeat: 2
+        });
+        return;
+      } else {
+        const wrongColor = COLOR_ORDER[platformColorIndex] ? COLOR_ORDER[platformColorIndex].toUpperCase() : 'UNKNOWN';
+        this.endGame(`JUMPED ON ${wrongColor}!`);
+        return;
+      }
     }
 
     this.velocityY = -JUMP_FORCE;
     this.isJumping = true;
+    
+    // Tutorial tracking
+    if (this.tutorialMode) {
+      this.tutorialJumpCount++;
+      this.updateTutorialProgress();
+    }
   }
 
   updateTimer() {
@@ -510,6 +663,104 @@ class GameScene extends Phaser.Scene {
         alpha: 1,
         duration: 400
       });
+    });
+  }
+
+  updateTutorialText() {
+    switch (this.tutorialStep) {
+      case 0:
+        this.tutorialText.setText('Welcome to Color Runner!');
+        this.tutorialSubtext.setText('Short press SPACE to cycle platform color');
+        break;
+      case 1:
+        this.tutorialText.setText('Great! Keep cycling...');
+        this.tutorialSubtext.setText(`${this.tutorialCycleCount}/3 cycles - Watch the colors change!`);
+        break;
+      case 2:
+        this.tutorialText.setText('Now try jumping!');
+        this.tutorialSubtext.setText('Cycle to RED, then HOLD SPACE to jump');
+        break;
+      case 3:
+        this.tutorialText.setText('Perfect! Practice a bit more...');
+        this.tutorialSubtext.setText(`${this.tutorialJumpCount}/3 jumps completed`);
+        break;
+      case 4:
+        this.tutorialText.setText('Ready for the real game!');
+        this.tutorialSubtext.setText('Get ready...');
+        break;
+    }
+  }
+
+  updateTutorialProgress() {
+    switch (this.tutorialStep) {
+      case 0:
+        // Wait for first cycle
+        if (this.tutorialCycleCount >= 1) {
+          this.tutorialStep = 1;
+          this.updateTutorialText();
+        }
+        break;
+      case 1:
+        // Wait for 3 cycles
+        this.updateTutorialText();
+        if (this.tutorialCycleCount >= 3) {
+          this.tutorialStep = 2;
+          this.updateTutorialText();
+        }
+        break;
+      case 2:
+        // Wait for first jump
+        if (this.tutorialJumpCount >= 1) {
+          this.tutorialStep = 3;
+          this.updateTutorialText();
+        }
+        break;
+      case 3:
+        // Wait for 3 jumps
+        this.updateTutorialText();
+        if (this.tutorialJumpCount >= 3) {
+          this.tutorialStep = 4;
+          this.updateTutorialText();
+          
+    // End tutorial after delay
+    this.time.delayedCall(2000, () => {
+      this.endTutorial();
+      // Mark that tutorial has been completed
+      GameScene.firstPlay = false;
+    });
+        }
+        break;
+    }
+  }
+
+  endTutorial() {
+    // Fade out tutorial UI
+    this.tweens.add({
+      targets: [this.tutorialOverlay, this.tutorialText, this.tutorialSubtext],
+      alpha: 0,
+      duration: 500,
+      onComplete: () => {
+        this.tutorialOverlay.setVisible(false);
+        this.tutorialText.setVisible(false);
+        this.tutorialSubtext.setVisible(false);
+      }
+    });
+
+    // Clear tutorial platform and spawn normal platforms
+    this.time.delayedCall(500, () => {
+      this.tutorialMode = false;
+      
+      // Clear tutorial platform
+      this.platforms.clear(true, true);
+      
+      // Reset platform width
+      this.currentPlatformWidth = INITIAL_PLATFORM_WIDTH;
+      
+      // Spawn normal game platforms
+      this.spawnInitialPlatforms();
+      
+      // Reset timer
+      this.elapsedTime = 0;
     });
   }
 }
