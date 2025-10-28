@@ -20,9 +20,9 @@ class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
     
-    // Check if this is the first game session
+    // Check if this is the first game session (persisted in localStorage)
     if (typeof GameScene.firstPlay === 'undefined') {
-      GameScene.firstPlay = true;
+      GameScene.firstPlay = localStorage.getItem('colorRunnerTutorialCompleted') !== 'true';
     }
   }
 
@@ -64,16 +64,16 @@ class GameScene extends Phaser.Scene {
     this.uiPanel.setOrigin(0.5, 0.5);
     this.uiPanel.setStrokeStyle(2, 0x444444);
 
-    // Current platform color display
-    this.platformColorDisplay = this.add.rectangle(150, 540, 120, 50, COLORS.blue);
-    this.platformColorDisplay.setOrigin(0.5, 0.5);
-    this.platformColorDisplay.setStrokeStyle(2, 0x888888);
-    this.add.text(150, 560, 'PLATFORM', {
-      fontSize: '10px',
-      fontFamily: 'Arial',
-      color: '#cccccc',
-      align: 'center'
-    }).setOrigin(0.5, 0);
+     // Current platform color display
+     this.platformColorDisplay = this.add.rectangle(150, 540, 120, 50, COLORS.blue);
+     this.platformColorDisplay.setOrigin(0.5, 0.5);
+     this.platformColorDisplay.setStrokeStyle(2, 0x888888);
+     this.add.text(150, 540, 'PLATFORM', {
+       fontSize: '10px',
+       fontFamily: 'Arial',
+       color: '#cccccc',
+       align: 'center'
+     }).setOrigin(0.5, 0.5);
 
     // Space control button (combined cycle/jump)
     this.spaceButton = this.add.rectangle(400, 540, 180, 50, 0x666666);
@@ -112,6 +112,16 @@ class GameScene extends Phaser.Scene {
     this.pressGaugeThreshold = this.add.circle(gaugeX, gaugeY, gaugeRadius * 0.7, 0x000000, 0);
     this.pressGaugeThreshold.setStrokeStyle(2, 0xe74c3c, 0.6);
     this.pressGaugeThreshold.setVisible(false);
+
+    // High score display
+    this.highScore = parseFloat(localStorage.getItem('colorRunnerHighScore') || '0');
+    this.highScoreText = this.add.text(760, 30, this.highScore > 0 ? `BEST: ${this.formatTime(this.highScore)}` : '', {
+      fontSize: '16px',
+      fontFamily: 'monospace',
+      color: '#ffd700',
+      fontStyle: 'bold'
+    });
+    this.highScoreText.setOrigin(1, 0);
 
     // Timer display
     this.timerText = this.add.text(650, 520, '00.00', {
@@ -512,6 +522,12 @@ class GameScene extends Phaser.Scene {
     this.timerText.setText(timeStr);
   }
 
+  formatTime(time) {
+    const minutes = Math.floor(time / 60);
+    const seconds = time % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds.toFixed(2)).padStart(5, '0')}`;
+  }
+
   updatePlatformWidth(delta) {
     // Gradually shrink platforms over time
     const shrinkAmount = PLATFORM_SHRINK_RATE * (delta / 1000);
@@ -537,6 +553,13 @@ class GameScene extends Phaser.Scene {
     this.gameOver = true;
     this.gameOverAnimationPlaying = true;
     this.deathReason = reason;
+
+    // Check for new high score
+    if (this.elapsedTime > this.highScore) {
+      this.highScore = this.elapsedTime;
+      localStorage.setItem('colorRunnerHighScore', this.highScore.toString());
+      this.highScoreText.setText(`BEST: ${this.formatTime(this.highScore)}`);
+    }
 
     // Screen shake effect
     this.cameras.main.shake(300, 0.01);
@@ -727,6 +750,7 @@ class GameScene extends Phaser.Scene {
       this.endTutorial();
       // Mark that tutorial has been completed
       GameScene.firstPlay = false;
+      localStorage.setItem('colorRunnerTutorialCompleted', 'true');
     });
         }
         break;
