@@ -7,7 +7,7 @@ const COLORS = {
 };
 
 const COLOR_ORDER = ['blue', 'yellow', 'red'];
-const INITIAL_PLATFORM_WIDTH = 200;
+const INITIAL_PLATFORM_WIDTH = 500;
 const MIN_PLATFORM_WIDTH = 80;
 const PLATFORM_HEIGHT = 20;
 const PLATFORM_GAP = 140;
@@ -25,7 +25,7 @@ class GameScene extends Phaser.Scene {
     // Game state
     this.gameOver = false;
     this.elapsedTime = 0;
-    this.playerX = 40;
+    this.playerX = 50; // Start at center of first platform
     this.playerY = 400;
     this.velocityY = 0;
     this.isJumping = false;
@@ -64,29 +64,22 @@ class GameScene extends Phaser.Scene {
       align: 'center'
     }).setOrigin(0.5, 0);
 
-    // Color button (cycle platform color)
-    this.colorButton = this.add.rectangle(300, 540, 100, 50, 0x666666);
-    this.colorButton.setInteractive({ useHandCursor: true });
-    this.colorButton.on('pointerdown', () => this.cycleCurrentPlatformColor());
-    this.colorButton.setStrokeStyle(2, 0x888888);
-    this.add.text(300, 540, 'CYCLE', {
-      fontSize: '14px',
-      fontFamily: 'Arial',
-      color: '#000000',
-      fontStyle: 'bold',
-      align: 'center'
-    }).setOrigin(0.5, 0.5);
-
-    // Jump button
-    this.jumpButton = this.add.rectangle(500, 540, 100, 50, 0xff6b6b);
-    this.jumpButton.setInteractive({ useHandCursor: true });
-    this.jumpButton.on('pointerdown', () => this.attemptJump());
-    this.jumpButton.setStrokeStyle(2, 0xffaaaa);
-    this.add.text(500, 540, 'JUMP', {
-      fontSize: '14px',
+    // Space control button (combined cycle/jump)
+    this.spaceButton = this.add.rectangle(400, 540, 180, 50, 0x666666);
+    this.spaceButton.setInteractive({ useHandCursor: true });
+    this.spaceButton.on('pointerdown', () => this.cycleCurrentPlatformColor());
+    this.spaceButton.setStrokeStyle(2, 0x888888);
+    this.add.text(400, 530, 'SPACE', {
+      fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffffff',
       fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5, 0.5);
+    this.add.text(400, 550, 'Short=CYCLE  Long=JUMP', {
+      fontSize: '10px',
+      fontFamily: 'Arial',
+      color: '#cccccc',
       align: 'center'
     }).setOrigin(0.5, 0.5);
 
@@ -174,22 +167,40 @@ class GameScene extends Phaser.Scene {
       if (this.gameOver) this.scene.restart();
     });
     
+    // Space bar press duration tracking
+    this.spacePressStartTime = 0;
+    this.spacePressed = false;
+    
     this.input.keyboard.on('keydown-SPACE', () => {
-      this.attemptJump();
+      if (!this.spacePressed) {
+        this.spacePressed = true;
+        this.spacePressStartTime = this.time.now;
+      }
     });
 
-    this.input.keyboard.on('keydown-C', () => {
-      this.cycleCurrentPlatformColor();
+    this.input.keyboard.on('keyup-SPACE', () => {
+      if (this.spacePressed) {
+        this.spacePressed = false;
+        const pressDuration = this.time.now - this.spacePressStartTime;
+        
+        // Short press = cycle color, long press = jump
+        if (pressDuration < 200) {
+          this.cycleCurrentPlatformColor();
+        } else {
+          this.attemptJump();
+        }
+      }
     });
   }
 
   spawnInitialPlatforms() {
-    // First platform at game start (blue)
-    const firstPlatform = this.createPlatform(100, 400, 0);
+    // First platform at game start (blue) - positioned so left edge is at screen left edge (x=0)
+    // Platform width is INITIAL_PLATFORM_WIDTH (500), so center should be at 250
+    const firstPlatform = this.createPlatform(250, 400, 0);
     this.currentPlatform = firstPlatform;
 
     // Subsequent platforms with varied colors
-    let nextX = 100 + this.currentPlatformWidth + PLATFORM_GAP;
+    let nextX = 250 + this.currentPlatformWidth + PLATFORM_GAP;
     for (let i = 1; i < 10; i++) {
       // Ensure some variation in colors for interesting patterns
       const colorIndex = Math.floor(Math.random() * 3);
@@ -237,9 +248,10 @@ class GameScene extends Phaser.Scene {
       platform.x -= PLATFORM_SPEED * (delta / 1000);
     });
 
-    // Remove off-screen platforms
+    // Remove off-screen platforms - only when completely off screen (accounting for platform width)
     this.platforms.children.entries.forEach(platform => {
-      if (platform.x < -100) {
+      const platformHalfWidth = platform.width / 2;
+      if (platform.x < -platformHalfWidth - 50) { // Extra buffer to ensure it's fully off-screen
         this.platforms.remove(platform);
         platform.destroy();
       }
