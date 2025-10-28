@@ -7,12 +7,14 @@ const COLORS = {
 };
 
 const COLOR_ORDER = ['blue', 'yellow', 'red'];
-const PLATFORM_WIDTH = 200;
+const INITIAL_PLATFORM_WIDTH = 200;
+const MIN_PLATFORM_WIDTH = 80;
 const PLATFORM_HEIGHT = 20;
 const PLATFORM_GAP = 140;
 const PLATFORM_SPEED = 320;
 const GRAVITY = 900;
 const JUMP_FORCE = 400;
+const PLATFORM_SHRINK_RATE = 8; // pixels per second
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -31,6 +33,7 @@ class GameScene extends Phaser.Scene {
     this.platformCounter = 0;
     this.deathReason = null; // Track how the player died
     this.gameOverAnimationPlaying = false;
+    this.currentPlatformWidth = INITIAL_PLATFORM_WIDTH;
     
     // Create background
     this.backgroundRect = this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
@@ -94,6 +97,20 @@ class GameScene extends Phaser.Scene {
       color: '#4a9eff',
       fontStyle: 'bold'
     });
+
+    // Platform width indicator
+    this.widthLabel = this.add.text(650, 560, 'WIDTH', {
+      fontSize: '10px',
+      fontFamily: 'Arial',
+      color: '#888888',
+      align: 'center'
+    }).setOrigin(0.5, 0);
+
+    this.widthBar = this.add.rectangle(650, 580, 100, 8, 0x444444);
+    this.widthBar.setOrigin(0.5, 0.5);
+    
+    this.widthFill = this.add.rectangle(650, 580, 100, 8, 0x4a90e2);
+    this.widthFill.setOrigin(0.5, 0.5);
 
     // Game over overlay (dark fade)
     this.gameOverOverlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0);
@@ -172,21 +189,25 @@ class GameScene extends Phaser.Scene {
     this.currentPlatform = firstPlatform;
 
     // Subsequent platforms with varied colors
-    let nextX = 100 + PLATFORM_WIDTH + PLATFORM_GAP;
+    let nextX = 100 + this.currentPlatformWidth + PLATFORM_GAP;
     for (let i = 1; i < 10; i++) {
       // Ensure some variation in colors for interesting patterns
       const colorIndex = Math.floor(Math.random() * 3);
       this.createPlatform(nextX, 400, colorIndex);
-      nextX += PLATFORM_WIDTH + PLATFORM_GAP;
+      nextX += this.currentPlatformWidth + PLATFORM_GAP;
     }
   }
 
   createPlatform(x, y, colorIndex) {
-    const platform = this.add.rectangle(x, y, PLATFORM_WIDTH, PLATFORM_HEIGHT, COLORS[COLOR_ORDER[colorIndex]]);
+    // Ensure colorIndex is valid
+    const validColorIndex = Math.max(0, Math.min(2, colorIndex));
+    const color = COLOR_ORDER[validColorIndex];
+    
+    const platform = this.add.rectangle(x, y, this.currentPlatformWidth, PLATFORM_HEIGHT, COLORS[color]);
     platform.setOrigin(0.5, 0.5);
     platform.setStrokeStyle(1, 0xffffff);
-    platform.setData('colorIndex', colorIndex);
-    platform.setData('color', COLOR_ORDER[colorIndex]);
+    platform.setData('colorIndex', validColorIndex);
+    platform.setData('color', color);
     this.platforms.add(platform);
     return platform;
   }
@@ -203,6 +224,9 @@ class GameScene extends Phaser.Scene {
 
     this.elapsedTime += delta / 1000;
     this.updateTimer();
+
+    // Update platform width based on elapsed time
+    this.updatePlatformWidth(delta);
 
     // Apply gravity and jumping
     this.velocityY += GRAVITY * (delta / 1000);
@@ -228,7 +252,7 @@ class GameScene extends Phaser.Scene {
       const children = this.platforms.getChildren();
       if (children.length > 0) {
         const lastPlatform = children[children.length - 1];
-        const nextX = lastPlatform.x + PLATFORM_WIDTH + PLATFORM_GAP;
+        const nextX = lastPlatform.x + this.currentPlatformWidth + PLATFORM_GAP;
         const randomColor = Math.floor(Math.random() * 3);
         this.createPlatform(nextX, 400, randomColor);
       }
@@ -255,7 +279,8 @@ class GameScene extends Phaser.Scene {
       const dx = Math.abs(this.playerX - platform.x);
 
       // Check if player is above platform and falling
-      const horizontalCollision = dx < (PLATFORM_WIDTH / 2 + 15);
+      const platformWidth = platform.width;
+      const horizontalCollision = dx < (platformWidth / 2 + 15);
       const verticalCollision = this.playerY >= platform.y - PLATFORM_HEIGHT / 2 - 20 && 
                                this.playerY <= platform.y + PLATFORM_HEIGHT / 2 + 10 &&
                                this.velocityY >= 0;
@@ -306,7 +331,7 @@ class GameScene extends Phaser.Scene {
     // Check if platform is red (colorIndex 2)
     const platformColorIndex = this.currentPlatform.getData('colorIndex');
     if (platformColorIndex !== 2) {
-      const wrongColor = COLOR_ORDER[platformColorIndex].toUpperCase();
+      const wrongColor = COLOR_ORDER[platformColorIndex] ? COLOR_ORDER[platformColorIndex].toUpperCase() : 'UNKNOWN';
       this.endGame(`JUMPED ON ${wrongColor}!`);
       return;
     }
@@ -320,6 +345,25 @@ class GameScene extends Phaser.Scene {
     const seconds = this.elapsedTime % 60;
     const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds.toFixed(2)).padStart(5, '0')}`;
     this.timerText.setText(timeStr);
+  }
+
+  updatePlatformWidth(delta) {
+    // Gradually shrink platforms over time
+    const shrinkAmount = PLATFORM_SHRINK_RATE * (delta / 1000);
+    this.currentPlatformWidth = Math.max(MIN_PLATFORM_WIDTH, this.currentPlatformWidth - shrinkAmount);
+    
+    // Update width indicator
+    const widthPercentage = (this.currentPlatformWidth - MIN_PLATFORM_WIDTH) / (INITIAL_PLATFORM_WIDTH - MIN_PLATFORM_WIDTH);
+    this.widthFill.width = 100 * widthPercentage;
+    
+    // Change color as platforms get smaller
+    if (widthPercentage > 0.6) {
+      this.widthFill.setFillStyle(0x4a90e2); // Blue - safe
+    } else if (widthPercentage > 0.3) {
+      this.widthFill.setFillStyle(0xf5d547); // Yellow - warning
+    } else {
+      this.widthFill.setFillStyle(0xe74c3c); // Red - danger
+    }
   }
 
   endGame(reason) {
