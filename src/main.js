@@ -7,12 +7,12 @@ const COLORS = {
 };
 
 const COLOR_ORDER = ['blue', 'yellow', 'red'];
-const PLATFORM_WIDTH = 100;
+const PLATFORM_WIDTH = 200;
 const PLATFORM_HEIGHT = 20;
 const PLATFORM_GAP = 140;
 const PLATFORM_SPEED = 320;
 const GRAVITY = 900;
-const JUMP_FORCE = 520;
+const JUMP_FORCE = 400;
 
 class GameScene extends Phaser.Scene {
   constructor() {
@@ -23,15 +23,17 @@ class GameScene extends Phaser.Scene {
     // Game state
     this.gameOver = false;
     this.elapsedTime = 0;
-    this.playerX = 50;
-    this.playerY = 350;
+    this.playerX = 40;
+    this.playerY = 400;
     this.velocityY = 0;
     this.isJumping = false;
     this.currentPlatform = null;
     this.platformCounter = 0;
+    this.deathReason = null; // Track how the player died
+    this.gameOverAnimationPlaying = false;
     
     // Create background
-    this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
+    this.backgroundRect = this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
 
     // Create platforms group
     this.platforms = this.add.group();
@@ -93,9 +95,13 @@ class GameScene extends Phaser.Scene {
       fontStyle: 'bold'
     });
 
+    // Game over overlay (dark fade)
+    this.gameOverOverlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0);
+    this.gameOverOverlay.setVisible(false);
+
     // Game over text
-    this.gameOverText = this.add.text(400, 200, 'GAME OVER', {
-      fontSize: '48px',
+    this.gameOverText = this.add.text(400, 180, 'GAME OVER', {
+      fontSize: '64px',
       fontFamily: 'Arial',
       color: '#ff6b6b',
       fontStyle: 'bold',
@@ -103,20 +109,42 @@ class GameScene extends Phaser.Scene {
     });
     this.gameOverText.setOrigin(0.5, 0.5);
     this.gameOverText.setVisible(false);
+    this.gameOverText.setScale(0);
+
+    // Death reason text
+    this.deathReasonText = this.add.text(400, 250, '', {
+      fontSize: '20px',
+      fontFamily: 'Arial',
+      color: '#ffaaaa',
+      align: 'center'
+    });
+    this.deathReasonText.setOrigin(0.5, 0.5);
+    this.deathReasonText.setVisible(false);
 
     // Game over time display
-    this.gameOverTimeText = this.add.text(400, 280, '', {
-      fontSize: '24px',
+    this.gameOverTimeText = this.add.text(400, 310, '', {
+      fontSize: '32px',
       fontFamily: 'monospace',
-      color: '#ffffff',
-      align: 'center'
+      color: '#4a9eff',
+      align: 'center',
+      fontStyle: 'bold'
     });
     this.gameOverTimeText.setOrigin(0.5, 0.5);
     this.gameOverTimeText.setVisible(false);
 
+    // Game over time label
+    this.timeLabel = this.add.text(400, 290, 'SURVIVED', {
+      fontSize: '14px',
+      fontFamily: 'Arial',
+      color: '#888888',
+      align: 'center'
+    });
+    this.timeLabel.setOrigin(0.5, 0.5);
+    this.timeLabel.setVisible(false);
+
     // Game over restart text
-    this.restartText = this.add.text(400, 340, 'Press R to Restart', {
-      fontSize: '18px',
+    this.restartText = this.add.text(400, 380, 'Press R to Restart', {
+      fontSize: '20px',
       fontFamily: 'Arial',
       color: '#cccccc',
       align: 'center'
@@ -164,7 +192,14 @@ class GameScene extends Phaser.Scene {
   }
 
   update(_time, delta) {
-    if (this.gameOver) return;
+    if (this.gameOver) {
+      // Animate restart text pulsing
+      if (this.restartText.visible) {
+        const pulse = Math.sin(_time / 300) * 0.1 + 0.9;
+        this.restartText.setScale(pulse);
+      }
+      return;
+    }
 
     this.elapsedTime += delta / 1000;
     this.updateTimer();
@@ -207,7 +242,7 @@ class GameScene extends Phaser.Scene {
 
     // Game over condition - fell off screen
     if (this.playerY > 600) {
-      this.endGame();
+      this.endGame('FELL INTO THE VOID');
     }
   }
 
@@ -271,7 +306,8 @@ class GameScene extends Phaser.Scene {
     // Check if platform is red (colorIndex 2)
     const platformColorIndex = this.currentPlatform.getData('colorIndex');
     if (platformColorIndex !== 2) {
-      this.endGame();
+      const wrongColor = COLOR_ORDER[platformColorIndex].toUpperCase();
+      this.endGame(`JUMPED ON ${wrongColor}!`);
       return;
     }
 
@@ -286,12 +322,139 @@ class GameScene extends Phaser.Scene {
     this.timerText.setText(timeStr);
   }
 
-  endGame() {
+  endGame(reason) {
+    if (this.gameOverAnimationPlaying) return;
+    
     this.gameOver = true;
+    this.gameOverAnimationPlaying = true;
+    this.deathReason = reason;
+
+    // Screen shake effect
+    this.cameras.main.shake(300, 0.01);
+
+    // Flash the current platform if player died on it
+    if (this.currentPlatform && reason.includes('JUMPED')) {
+      this.tweens.add({
+        targets: this.currentPlatform,
+        alpha: { from: 1, to: 0 },
+        yoyo: true,
+        repeat: 3,
+        duration: 100
+      });
+    }
+
+    // Player death animation - explode into particles
+    this.createDeathParticles();
+    
+    // Hide player
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0,
+      scale: 0,
+      duration: 300,
+      ease: 'Power2'
+    });
+
+    // Show game over screen with delay
+    this.time.delayedCall(500, () => {
+      this.showGameOverScreen();
+    });
+  }
+
+  createDeathParticles() {
+    // Create particle effect from player position
+    const particleCount = 12;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount;
+      const speed = 150 + Math.random() * 100;
+      const particle = this.add.rectangle(
+        this.player.x, 
+        this.player.y, 
+        6, 
+        6, 
+        0xffffff
+      );
+      
+      this.tweens.add({
+        targets: particle,
+        x: particle.x + Math.cos(angle) * speed,
+        y: particle.y + Math.sin(angle) * speed + 100,
+        alpha: { from: 1, to: 0 },
+        scale: { from: 1, to: 0 },
+        duration: 800,
+        ease: 'Power2',
+        onComplete: () => particle.destroy()
+      });
+    }
+  }
+
+  showGameOverScreen() {
+    // Show dark overlay
+    this.gameOverOverlay.setVisible(true);
+    this.tweens.add({
+      targets: this.gameOverOverlay,
+      alpha: 0.85,
+      duration: 400,
+      ease: 'Power2'
+    });
+
+    // Animate "GAME OVER" text with impact
     this.gameOverText.setVisible(true);
-    this.gameOverTimeText.setText(`Time: ${this.timerText.text}`);
-    this.gameOverTimeText.setVisible(true);
-    this.restartText.setVisible(true);
+    this.cameras.main.flash(200, 255, 50, 50);
+    this.tweens.add({
+      targets: this.gameOverText,
+      scale: { from: 0, to: 1.1 },
+      duration: 400,
+      ease: 'Back.easeOut',
+      delay: 200,
+      onComplete: () => {
+        this.tweens.add({
+          targets: this.gameOverText,
+          scale: 1,
+          duration: 200,
+          ease: 'Power2'
+        });
+      }
+    });
+
+    // Show death reason
+    this.time.delayedCall(600, () => {
+      this.deathReasonText.setText(this.deathReason);
+      this.deathReasonText.setVisible(true);
+      this.deathReasonText.setAlpha(0);
+      this.tweens.add({
+        targets: this.deathReasonText,
+        alpha: 1,
+        duration: 300
+      });
+    });
+
+    // Show time survived
+    this.time.delayedCall(900, () => {
+      this.timeLabel.setVisible(true);
+      this.gameOverTimeText.setText(this.timerText.text);
+      this.gameOverTimeText.setVisible(true);
+      
+      this.timeLabel.setAlpha(0);
+      this.gameOverTimeText.setAlpha(0);
+      
+      this.tweens.add({
+        targets: [this.timeLabel, this.gameOverTimeText],
+        alpha: 1,
+        duration: 400
+      });
+    });
+
+    // Show restart prompt with pulse animation
+    this.time.delayedCall(1300, () => {
+      this.restartText.setVisible(true);
+      this.restartText.setAlpha(0);
+      this.tweens.add({
+        targets: this.restartText,
+        alpha: 1,
+        duration: 400
+      });
+    });
   }
 }
 
