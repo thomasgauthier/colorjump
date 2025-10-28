@@ -1,0 +1,20 @@
+{
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --outfile=dist/bundle.js --format=iife --global-name=game",
+    "dev": "esbuild src/main.js --bundle --watch --outfile=dist/bundle.js --format=iife --global-name=game"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.19.0",
+  "devDependencies": {
+    "esbuild": "^0.25.11"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  }
+}
