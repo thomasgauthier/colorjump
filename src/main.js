@@ -7,19 +7,19 @@ const COLORS = {
 };
 
 const COLOR_ORDER = ['blue', 'yellow', 'red'];
-const INITIAL_PLATFORM_WIDTH = 500;
+const INITIAL_PLATFORM_WIDTH = 400;
 const MIN_PLATFORM_WIDTH = 80;
 const PLATFORM_HEIGHT = 20;
 const PLATFORM_GAP = 140;
 const PLATFORM_SPEED = 320;
 const GRAVITY = 900;
 const JUMP_FORCE = 400;
-const PLATFORM_SHRINK_RATE = 8; // pixels per second
+const PLATFORM_SHRINK_RATE = 25; // pixels per second
 
 class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' });
-    
+
     // Check if this is the first game session (persisted in localStorage)
     if (typeof GameScene.firstPlay === 'undefined') {
       GameScene.firstPlay = localStorage.getItem('colorRunnerTutorialCompleted') !== 'true';
@@ -39,19 +39,19 @@ class GameScene extends Phaser.Scene {
     this.deathReason = null; // Track how the player died
     this.gameOverAnimationPlaying = false;
     this.currentPlatformWidth = INITIAL_PLATFORM_WIDTH;
-    
+
     // Tutorial state
     this.tutorialMode = GameScene.firstPlay;
     this.tutorialStep = 0;
     this.tutorialCycleCount = 0;
     this.tutorialJumpCount = 0;
-    
+
     // Create background
     this.backgroundRect = this.add.rectangle(400, 300, 800, 600, 0x1a1a1a);
 
     // Create platforms group
     this.platforms = this.add.group();
-    
+
     // Spawn initial platforms - player starts on blue platform
     this.spawnInitialPlatforms();
 
@@ -64,16 +64,16 @@ class GameScene extends Phaser.Scene {
     this.uiPanel.setOrigin(0.5, 0.5);
     this.uiPanel.setStrokeStyle(2, 0x444444);
 
-     // Current platform color display
-     this.platformColorDisplay = this.add.rectangle(150, 540, 120, 50, COLORS.blue);
-     this.platformColorDisplay.setOrigin(0.5, 0.5);
-     this.platformColorDisplay.setStrokeStyle(2, 0x888888);
-     this.add.text(150, 540, 'PLATFORM', {
-       fontSize: '10px',
-       fontFamily: 'Arial',
-       color: '#cccccc',
-       align: 'center'
-     }).setOrigin(0.5, 0.5);
+    // Current platform color display
+    this.platformColorDisplay = this.add.rectangle(150, 540, 120, 50, COLORS.blue);
+    this.platformColorDisplay.setOrigin(0.5, 0.5);
+    this.platformColorDisplay.setStrokeStyle(2, 0x888888);
+    this.add.text(150, 540, 'PLATFORM', {
+      fontSize: '10px',
+      fontFamily: 'Arial',
+      color: '#cccccc',
+      align: 'center'
+    }).setOrigin(0.5, 0.5);
 
     // Space control button (combined cycle/jump)
     this.spaceButton = this.add.rectangle(400, 540, 180, 50, 0x666666);
@@ -98,16 +98,16 @@ class GameScene extends Phaser.Scene {
     const gaugeX = 400;
     const gaugeY = 505;
     const gaugeRadius = 8;
-    
+
     // Background circle
     this.pressGaugeBg = this.add.circle(gaugeX, gaugeY, gaugeRadius, 0x333333);
     this.pressGaugeBg.setStrokeStyle(1, 0x555555);
     this.pressGaugeBg.setVisible(false);
-    
+
     // Fill circle (grows as you hold)
     this.pressGaugeFill = this.add.circle(gaugeX, gaugeY, 0, 0xf5d547);
     this.pressGaugeFill.setVisible(false);
-    
+
     // Threshold ring (shows 200ms mark)
     this.pressGaugeThreshold = this.add.circle(gaugeX, gaugeY, gaugeRadius * 0.7, 0x000000, 0);
     this.pressGaugeThreshold.setStrokeStyle(2, 0xe74c3c, 0.6);
@@ -141,7 +141,7 @@ class GameScene extends Phaser.Scene {
 
     this.widthBar = this.add.rectangle(650, 580, 100, 8, 0x444444);
     this.widthBar.setOrigin(0.5, 0.5);
-    
+
     this.widthFill = this.add.rectangle(650, 580, 100, 8, 0x4a90e2);
     this.widthFill.setOrigin(0.5, 0.5);
 
@@ -207,7 +207,7 @@ class GameScene extends Phaser.Scene {
     this.tutorialOverlay.setOrigin(0.5, 0.5);
     this.tutorialOverlay.setStrokeStyle(3, 0x4a9eff);
     this.tutorialOverlay.setVisible(false);
-    
+
     this.tutorialText = this.add.text(400, 180, '', {
       fontSize: '24px',
       fontFamily: 'Arial',
@@ -217,7 +217,7 @@ class GameScene extends Phaser.Scene {
     });
     this.tutorialText.setOrigin(0.5, 0.5);
     this.tutorialText.setVisible(false);
-    
+
     this.tutorialSubtext = this.add.text(400, 220, '', {
       fontSize: '16px',
       fontFamily: 'Arial',
@@ -226,7 +226,7 @@ class GameScene extends Phaser.Scene {
     });
     this.tutorialSubtext.setOrigin(0.5, 0.5);
     this.tutorialSubtext.setVisible(false);
-    
+
     // Start tutorial
     if (this.tutorialMode) {
       this.tutorialOverlay.setVisible(true);
@@ -239,16 +239,16 @@ class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-R', () => {
       if (this.gameOver) this.scene.restart();
     });
-    
+
     // Space bar press duration tracking
     this.spacePressStartTime = 0;
     this.spacePressed = false;
-    
+
     this.input.keyboard.on('keydown-SPACE', () => {
       if (!this.spacePressed && !this.gameOver) {
         this.spacePressed = true;
         this.spacePressStartTime = this.time.now;
-        
+
         // Show gauge
         this.pressGaugeBg.setVisible(true);
         this.pressGaugeFill.setVisible(true);
@@ -260,12 +260,12 @@ class GameScene extends Phaser.Scene {
       if (this.spacePressed) {
         this.spacePressed = false;
         const pressDuration = this.time.now - this.spacePressStartTime;
-        
+
         // Hide gauge
         this.pressGaugeBg.setVisible(false);
         this.pressGaugeFill.setVisible(false);
         this.pressGaugeThreshold.setVisible(false);
-        
+
         // Short press = cycle color, long press = jump
         if (pressDuration < 200) {
           this.cycleCurrentPlatformColor();
@@ -273,6 +273,10 @@ class GameScene extends Phaser.Scene {
           this.attemptJump();
         }
       }
+    });
+
+    this.input.keyboard.on('keyup-CTRL', () => {
+      this.attemptJump();
     });
   }
 
@@ -308,7 +312,7 @@ class GameScene extends Phaser.Scene {
     // Ensure colorIndex is valid
     const validColorIndex = Math.max(0, Math.min(2, colorIndex));
     const color = COLOR_ORDER[validColorIndex];
-    
+
     const platform = this.add.rectangle(x, y, this.currentPlatformWidth, PLATFORM_HEIGHT, COLORS[color]);
     platform.setOrigin(0.5, 0.5);
     platform.setStrokeStyle(1, 0xffffff);
@@ -333,11 +337,11 @@ class GameScene extends Phaser.Scene {
       const pressDuration = this.time.now - this.spacePressStartTime;
       const maxDuration = 400; // Max visual duration (200ms is threshold)
       const progress = Math.min(pressDuration / maxDuration, 1);
-      
+
       // Scale the fill circle
       const maxRadius = 8;
       this.pressGaugeFill.radius = maxRadius * progress;
-      
+
       // Change color based on threshold
       if (pressDuration < 200) {
         // Short press - yellow
@@ -345,7 +349,7 @@ class GameScene extends Phaser.Scene {
       } else {
         // Long press - red (jump)
         this.pressGaugeFill.setFillStyle(0xe74c3c);
-        
+
         // Pulse effect when in jump zone
         const pulse = Math.sin(_time / 100) * 0.1 + 0.9;
         this.pressGaugeFill.setScale(pulse);
@@ -427,9 +431,9 @@ class GameScene extends Phaser.Scene {
       // Check if player is above platform and falling
       const platformWidth = platform.width;
       const horizontalCollision = dx < (platformWidth / 2 + 15);
-      const verticalCollision = this.playerY >= platform.y - PLATFORM_HEIGHT / 2 - 20 && 
-                               this.playerY <= platform.y + PLATFORM_HEIGHT / 2 + 10 &&
-                               this.velocityY >= 0;
+      const verticalCollision = this.playerY >= platform.y - PLATFORM_HEIGHT / 2 - 20 &&
+        this.playerY <= platform.y + PLATFORM_HEIGHT / 2 + 10 &&
+        this.velocityY >= 0;
 
       if (horizontalCollision && verticalCollision) {
         const distanceToPlatform = platform.y - this.playerY;
@@ -462,7 +466,7 @@ class GameScene extends Phaser.Scene {
     this.currentPlatform.setFillStyle(COLORS[nextColor]);
 
     this.updatePlatformColorDisplay();
-    
+
     // Tutorial tracking
     if (this.tutorialMode) {
       this.tutorialCycleCount++;
@@ -488,7 +492,7 @@ class GameScene extends Phaser.Scene {
         const wrongColor = COLOR_ORDER[platformColorIndex] ? COLOR_ORDER[platformColorIndex].toUpperCase() : 'UNKNOWN';
         this.tutorialText.setText(`Can't jump on ${wrongColor}!`);
         this.tutorialSubtext.setText('Cycle to RED first');
-        
+
         // Flash the platform
         this.tweens.add({
           targets: this.currentPlatform,
@@ -507,7 +511,7 @@ class GameScene extends Phaser.Scene {
 
     this.velocityY = -JUMP_FORCE;
     this.isJumping = true;
-    
+
     // Tutorial tracking
     if (this.tutorialMode) {
       this.tutorialJumpCount++;
@@ -532,11 +536,11 @@ class GameScene extends Phaser.Scene {
     // Gradually shrink platforms over time
     const shrinkAmount = PLATFORM_SHRINK_RATE * (delta / 1000);
     this.currentPlatformWidth = Math.max(MIN_PLATFORM_WIDTH, this.currentPlatformWidth - shrinkAmount);
-    
+
     // Update width indicator
     const widthPercentage = (this.currentPlatformWidth - MIN_PLATFORM_WIDTH) / (INITIAL_PLATFORM_WIDTH - MIN_PLATFORM_WIDTH);
     this.widthFill.width = 100 * widthPercentage;
-    
+
     // Change color as platforms get smaller
     if (widthPercentage > 0.6) {
       this.widthFill.setFillStyle(0x4a90e2); // Blue - safe
@@ -549,7 +553,7 @@ class GameScene extends Phaser.Scene {
 
   endGame(reason) {
     if (this.gameOverAnimationPlaying) return;
-    
+
     this.gameOver = true;
     this.gameOverAnimationPlaying = true;
     this.deathReason = reason;
@@ -577,7 +581,7 @@ class GameScene extends Phaser.Scene {
 
     // Player death animation - explode into particles
     this.createDeathParticles();
-    
+
     // Hide player
     this.tweens.add({
       targets: this.player,
@@ -600,13 +604,13 @@ class GameScene extends Phaser.Scene {
       const angle = (Math.PI * 2 * i) / particleCount;
       const speed = 150 + Math.random() * 100;
       const particle = this.add.rectangle(
-        this.player.x, 
-        this.player.y, 
-        6, 
-        6, 
+        this.player.x,
+        this.player.y,
+        6,
+        6,
         0xffffff
       );
-      
+
       this.tweens.add({
         targets: particle,
         x: particle.x + Math.cos(angle) * speed,
@@ -666,10 +670,10 @@ class GameScene extends Phaser.Scene {
       this.timeLabel.setVisible(true);
       this.gameOverTimeText.setText(this.timerText.text);
       this.gameOverTimeText.setVisible(true);
-      
+
       this.timeLabel.setAlpha(0);
       this.gameOverTimeText.setAlpha(0);
-      
+
       this.tweens.add({
         targets: [this.timeLabel, this.gameOverTimeText],
         alpha: 1,
@@ -744,14 +748,14 @@ class GameScene extends Phaser.Scene {
         if (this.tutorialJumpCount >= 3) {
           this.tutorialStep = 4;
           this.updateTutorialText();
-          
-    // End tutorial after delay
-    this.time.delayedCall(2000, () => {
-      this.endTutorial();
-      // Mark that tutorial has been completed
-      GameScene.firstPlay = false;
-      localStorage.setItem('colorRunnerTutorialCompleted', 'true');
-    });
+
+          // End tutorial after delay
+          this.time.delayedCall(2000, () => {
+            this.endTutorial();
+            // Mark that tutorial has been completed
+            GameScene.firstPlay = false;
+            localStorage.setItem('colorRunnerTutorialCompleted', 'true');
+          });
         }
         break;
     }
@@ -773,16 +777,16 @@ class GameScene extends Phaser.Scene {
     // Clear tutorial platform and spawn normal platforms
     this.time.delayedCall(500, () => {
       this.tutorialMode = false;
-      
+
       // Clear tutorial platform
       this.platforms.clear(true, true);
-      
+
       // Reset platform width
       this.currentPlatformWidth = INITIAL_PLATFORM_WIDTH;
-      
+
       // Spawn normal game platforms
       this.spawnInitialPlatforms();
-      
+
       // Reset timer
       this.elapsedTime = 0;
     });
