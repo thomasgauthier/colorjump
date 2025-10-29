@@ -139173,14 +139173,14 @@ var game = (() => {
     red: 15158332
   };
   var COLOR_ORDER = ["blue", "yellow", "red"];
-  var INITIAL_PLATFORM_WIDTH = 500;
+  var INITIAL_PLATFORM_WIDTH = 400;
   var MIN_PLATFORM_WIDTH = 80;
   var PLATFORM_HEIGHT = 20;
   var PLATFORM_GAP = 140;
   var PLATFORM_SPEED = 320;
   var GRAVITY = 900;
   var JUMP_FORCE = 400;
-  var PLATFORM_SHRINK_RATE = 8;
+  var PLATFORM_SHRINK_RATE = 25;
   var GameScene = class _GameScene extends import_phaser.default.Scene {
     constructor() {
       super({ key: "GameScene" });
@@ -139372,6 +139372,9 @@ var game = (() => {
             this.attemptJump();
           }
         }
+      });
+      this.input.keyboard.on("keyup-CTRL", () => {
+        this.attemptJump();
       });
     }
     spawnInitialPlatforms() {
