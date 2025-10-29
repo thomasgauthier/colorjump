@@ -139689,7 +139689,7 @@ var game = (() => {
     updateTutorialText() {
       switch (this.tutorialStep) {
         case 0:
-          this.tutorialText.setText("Welcome to Color Runner!");
+          this.tutorialText.setText("Welcome to Color Jump!");
           this.tutorialSubtext.setText("Short press SPACE to cycle platform color");
           break;
         case 1:
